@@ -1,114 +1,49 @@
-#include <sys/types.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(demo, LOG_LEVEL_DBG);
 
-#define PRIO_LOW   7
-#define PRIO_MED   5
-#define PRIO_HIGH  3
+#define PRIO_WORKER 5
+#define STACK_SIZE  1024
+#define INCREMENTS  1000000
 
-#define PRIO_COOP  -1
+static volatile uint32_t counter;
+static struct k_sem sem;
 
-#define STACK_SIZE 1024
+K_MUTEX_DEFINE(counter_mutex);
 
-void t_low_fn (void *p1, void *p2, void *p3)
+void t_worker_fn (void *p1, void *p2, void *p3)
 {
-	while (1) {
-		LOG_INF("T_LOW running: tick=%u", k_uptime_get_32());
-		k_msleep(300);
-	}
-}
+	ARG_UNUSED(p1);
+	ARG_UNUSED(p2);
+	ARG_UNUSED(p3);
 
-void t_med_fn (void *p1, void *p2, void *p3)
-{
-	while (1) {
-		LOG_INF("T_MED running: tick=%u", k_uptime_get_32());
-		k_msleep(200);
-	}
-}
+	const char *name = k_thread_name_get(k_current_get());
+	LOG_INF("THREAD %s: started", name);
 
-void t_high_fn (void *p1, void *p2, void *p3)
-{
-	while (1) {
-		LOG_INF("T_HIGH running: tick=%u", k_uptime_get_32());
-		k_msleep(100);
-	}
-}
-
-void t_coop_1_fn (void *p1, void *p2, void *p3)
-{
-	LOG_INF("COOPERTIVE THREAD 1 started");
-
-	for (int i = 0; i < 5; i++) {
-		LOG_INF("COOPERATIVE THREAD 1: starting k_busy_wait, tick=%u", k_uptime_get_32());
-		k_busy_wait(100000);
-		LOG_INF("COOPERTIVE THREAD 1: tick=%u", k_uptime_get_32());
+	for (int i = 0; i < INCREMENTS; i++) {
+		k_mutex_lock(&counter_mutex, K_FOREVER);
+		counter++;
+		k_mutex_unlock(&counter_mutex);
 	}
 
-	LOG_INF("COOPERTIVE THREAD 1: yielding");
-	k_yield();
-	LOG_INF("COOPERTIVE THREAD 1: finished");
+	LOG_INF("THREAD %s: finished", name);
+	k_sem_give(&sem);
 }
 
-void t_coop_2_fn (void *p1, void *p2, void *p3)
-{
-	LOG_INF("COOPERTIVE THREAD 2 started");
-
-	for (int i = 0; i < 5; i++) {
-		LOG_INF("COOPERTIVE THREAD 2: starting k_busy_wait, tick=%u", k_uptime_get_32());
-		k_busy_wait(100000);
-		LOG_INF("COOPERTIVE THREAD 2: tick=%u", k_uptime_get_32());
-	}
-
-	LOG_INF("COOPERTIVE THREAD 2: yielding");
-	k_yield();
-	LOG_INF("COOPERTIVE THREAD 2: finished");
-}
-
-void t_coop_3_fn (void *p1, void *p2, void *p3)
-{
-	LOG_INF("COOPERTIVE THREAD 3 started");
-
-	for (int i = 0; i < 5; i++) {
-		LOG_INF("COOPERTIVE THREAD 3: starting k_busy_wait, tick=%u", k_uptime_get_32());
-		k_busy_wait(100000);
-		LOG_INF("COOPERTIVE THREAD 3: tick=%u", k_uptime_get_32());
-	}
-
-	LOG_INF("COOPERTIVE THREAD 3: yielding");
-	k_yield();
-	LOG_INF("COOPERTIVE THREAD 3: finished");
-}
-
-void t_coop_4_fn (void *p1, void *p2, void *p3)
-{
-	LOG_INF("COOPERTIVE THREAD 4 started");
-
-	for (int i = 0; i < 5; i++) {
-		LOG_INF("COOPERTIVE THREAD 4: starting k_busy_wait, tick=%u", k_uptime_get_32());
-		k_busy_wait(100000);
-		LOG_INF("COOPERTIVE THREAD 4: tick=%u", k_uptime_get_32());
-	}
-
-	LOG_INF("COOPERTIVE THREAD 4: yielding");
-	k_yield();
-	LOG_INF("COOPERTIVE THREAD 4: finished");
-}
-
-// Thread definitions for the low, medium, and high priority threads
-K_THREAD_DEFINE(t_low, STACK_SIZE, t_low_fn, NULL, NULL, NULL, PRIO_LOW, 0, 0);
-K_THREAD_DEFINE(t_med, STACK_SIZE, t_med_fn, NULL, NULL, NULL, PRIO_MED, 0, 0);
-K_THREAD_DEFINE(t_high, STACK_SIZE, t_high_fn, NULL, NULL, NULL, PRIO_HIGH, 0, 0);
-
-// Cooperative threads
-K_THREAD_DEFINE(t_coop_1, STACK_SIZE, t_coop_1_fn, NULL, NULL, NULL, PRIO_COOP, 0, 0);
-K_THREAD_DEFINE(t_coop_2, STACK_SIZE, t_coop_2_fn, NULL, NULL, NULL, PRIO_COOP, 0, 0);
-K_THREAD_DEFINE(t_coop_3, STACK_SIZE, t_coop_3_fn, NULL, NULL, NULL, PRIO_COOP, 0, 0);
-K_THREAD_DEFINE(t_cop_4, STACK_SIZE, t_coop_4_fn, NULL, NULL, NULL, PRIO_COOP, 0, 0);
+K_THREAD_DEFINE(t_worker_1, STACK_SIZE, t_worker_fn, NULL, NULL, NULL, PRIO_WORKER, 0, 0);
+K_THREAD_DEFINE(t_worker_2, STACK_SIZE, t_worker_fn, NULL, NULL, NULL, PRIO_WORKER, 0, 0);
 
 int main (void)
 {
-	LOG_INF("Lesson 1 - Task 1: started");
+	LOG_INF("Lesson 2 - Task 1: started");
+
+	k_sem_init(&sem, 0, 2);
+
+	k_sem_take(&sem, K_FOREVER);
+	k_sem_take(&sem, K_FOREVER);
+
+	LOG_INF("Final counter value: %u", (unsigned int)counter);
+
 	return 0;
 }
