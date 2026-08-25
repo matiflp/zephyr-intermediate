@@ -48,33 +48,33 @@
 LOG_MODULE_REGISTER(homework, LOG_LEVEL_DBG);
 
 #define STACK_SIZE  1024
-#define SENSOR_MS   100 /* sensor fires every 100ms */
-#define POLL_MS     10  /* polling consumer checks every 10ms */
-#define EVENT_COUNT 10  /* total sensor events to produce */
+#define SENSOR_MS   20 /* sensor fires every 100ms */
+#define EVENT_COUNT 5  /* total sensor events to produce */
+
+// Bonus
+#define DEBOUNCE_MS 30
+#define INTERVAL_MS SENSOR_MS / EVENT_COUNT
 
 /* ================================================================
  * STARTER CODE -- inefficient polling version
  * Run this first, then replace with workqueue in Task 2.
  * ================================================================ */
 
-/* Shared flag between sensor_sim and polling_thread */
-static volatile bool sensor_flag;
-
 /* Statistics */
 static int total_events;
-static int total_wakeups;
 static int total_processed;
 
 static void sensor_handler (struct k_work *work)
 {
 	ARG_UNUSED(work);
-	total_wakeups++;
+
 	total_processed++;
-	LOG_INF("[HANDLER] CONTEXT %s, processed event %d  tick=%u", k_thread_name_get(k_current_get()),
-	        total_processed, k_uptime_get_32());
+
+	LOG_INF("[HANDLER] CONTEXT=%s processed=%d events=%d tick=%u", k_thread_name_get(k_current_get()),
+	        total_processed, total_events, k_uptime_get_32());
 }
 
-K_WORK_DEFINE(sensor_work, sensor_handler);
+K_WORK_DELAYABLE_DEFINE(debounce_work, sensor_handler);
 
 /* ------------------------------------------------------------------ */
 /*  sensor_sim - fires EVENT_COUNT events, 100ms apart               */
@@ -82,34 +82,36 @@ K_WORK_DEFINE(sensor_work, sensor_handler);
 
 static void sensor_sim_fn (void *p1, void *p2, void *p3)
 {
+	ARG_UNUSED(p1);
+	ARG_UNUSED(p2);
+	ARG_UNUSED(p3);
+
 	for (int i = 0; i < EVENT_COUNT; i++) {
-		k_msleep(SENSOR_MS);
+		k_msleep(INTERVAL_MS);
 
 		total_events++;
-		LOG_INF("[SENSOR] event %d  tick=%u", total_events, k_uptime_get_32());
 
-		int ret = k_work_submit(&sensor_work);
-		if (ret < 0) {
-			LOG_ERR("submit failed: %d", ret);
-		}
+		uint32_t tick = k_uptime_get_32();
+
+		int ret = k_work_reschedule(&debounce_work, K_MSEC(DEBOUNCE_MS));
+
+		LOG_INF("[SENSOR] event=%d/%d reschedule_tick=%u deadline~%u ret=%d", total_events, EVENT_COUNT, tick,
+		        tick + DEBOUNCE_MS, ret);
 	}
 
-	LOG_INF("[SENSOR] all events produced");
-	LOG_INF("\n");
-	LOG_INF("[SUMMARY] events=%d  total_wakeups=%d  wasted=%d", total_processed, total_wakeups,
-	        total_wakeups - total_processed);
-	LOG_INF("[SUMMARY] wasted wakeups = %d%% of all wakeups",
-	        (total_wakeups - total_processed) * 100 / total_wakeups);
+	LOG_INF("[SENSOR] burst completed: %d events within ~%d ms", total_events, SENSOR_MS);
 }
 
 K_THREAD_DEFINE(sensor_thread, STACK_SIZE, sensor_sim_fn, NULL, NULL, NULL, 5, 0, 0);
 
 int main (void)
 {
-	LOG_INF("=== L3 Homework: Kernel Workqueue ===");
+	LOG_INF("=== L3 Homework: Debounce ===");
 
 	/* Wait long enough for all events to complete */
 	k_msleep((EVENT_COUNT + 2) * SENSOR_MS + 500);
+
+	LOG_INF("[SUMMARY] total_events=%d total_processed=%d", total_events, total_processed);
 
 	return 0;
 }
