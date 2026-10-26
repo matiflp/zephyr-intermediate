@@ -5,8 +5,8 @@
 LOG_MODULE_REGISTER(homework, LOG_LEVEL_INF);
 
 #define STACK_SIZE            2048
-#define CONTROL_PRIORITY         7
-#define MAINTENANCE_PRIORITY     4
+#define CONTROL_PRIORITY         4
+#define MAINTENANCE_PRIORITY     7
 #define EVENT_PERIOD_MS        250
 #define MAINTENANCE_LOAD_US  45000
 
@@ -43,6 +43,7 @@ static void event_timer_expiry(struct k_timer *timer)
     k_sem_give(&maintenance_start);
 
     /* TODO: Add an application trace event for this sequence. */
+    sys_trace_named_event("event_ready", event.seq, k_msgq_num_used_get(&control_queue));
 }
 
 K_TIMER_DEFINE(event_timer, event_timer_expiry, NULL);
@@ -56,20 +57,30 @@ static void control_fn(void *p1, void *p2, void *p3)
     ARG_UNUSED(p1); ARG_UNUSED(p2); ARG_UNUSED(p3);
 
     while (true) {
+        static uint32_t deadline_misses = 0;
+
         struct control_event event;
         int ret = k_msgq_get(&control_queue, &event, K_FOREVER);
-
         if (ret != 0) {
             LOG_ERR("[CONTROL] receive failed: %d", ret);
             continue;
         }
 
-        LOG_INF("[CONTROL] processed seq=%u", event.seq);
-
         /* TODO: Define a response-time guarantee. */
+        uint32_t delay_ms = k_uptime_get_32() - event.ready_ms;
+
         /* TODO: Measure latency and count every deadline miss. */
-        /* TODO: Rate-limit repeated warning messages. */
+        if (delay_ms > 10) 
+        {
+            deadline_misses++;
+            /* TODO: Rate-limit repeated warning messages. */
+            LOG_WRN_RATELIMIT("[CONTROL] deadline longer than the one established: seq=%u, delay=%u ms, total misses=%u", event.seq, delay_ms, deadline_misses);
+        }
+
         /* TODO: Add an application trace event for completion. */
+        sys_trace_named_event("event_done", event.seq, delay_ms);
+
+        LOG_INF("[CONTROL] processed seq=%u", event.seq);        
     }
 }
 
