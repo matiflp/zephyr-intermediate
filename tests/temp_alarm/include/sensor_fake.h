@@ -16,6 +16,7 @@
 /* FFF fake for sensor_driver_api.channel_get. */
 DECLARE_FAKE_VALUE_FUNC(int, fake_sensor_channel_get, const struct device *, enum sensor_channel,
 			struct sensor_value *);
+DECLARE_FAKE_VALUE_FUNC(int, fake_sensor_sample_fetch, const struct device *, enum sensor_channel);
 
 /** The fake sensor device the tests pass to temp_alarm_init(). */
 extern struct device fake_sensor_dev;

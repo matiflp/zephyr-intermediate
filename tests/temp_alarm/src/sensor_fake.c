@@ -14,10 +14,13 @@ DEFINE_FFF_GLOBALS;
 
 DEFINE_FAKE_VALUE_FUNC(int, fake_sensor_channel_get, const struct device *, enum sensor_channel,
 		       struct sensor_value *);
+DEFINE_FAKE_VALUE_FUNC(int, fake_sensor_sample_fetch, const struct device *, enum sensor_channel);
 
 /* ---- Simulated sensor state ---------------------------------------------- */
 
 static int sim_temperature;
+
+/* ---- custom_fake implementations ---------------------------------------- */
 
 /*
  * Writes the simulated temperature into the caller's sensor_value. val1 holds
@@ -37,10 +40,11 @@ static int custom_sensor_channel_get(const struct device *dev, enum sensor_chann
 
 /* ---- Fake sensor device -------------------------------------------------- */
 
+
 /* The API table temp_alarm.c calls through. */
 static const struct sensor_driver_api fake_sensor_api = {
 	/* TODO(l8-task0): replace NULL with fake_sensor_sample_fetch. */
-	.sample_fetch = NULL,
+	.sample_fetch = fake_sensor_sample_fetch,
 	.channel_get = fake_sensor_channel_get,
 };
 
@@ -72,6 +76,7 @@ void sensor_fake_reset(void)
 {
 	/* TODO(l8-task0): reset fake_sensor_sample_fetch here too. */
 	RESET_FAKE(fake_sensor_channel_get);
+	RESET_FAKE(fake_sensor_sample_fetch);
 	FFF_RESET_HISTORY();
 
 	sim_temperature = 0;
